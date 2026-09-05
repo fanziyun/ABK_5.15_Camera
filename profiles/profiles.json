@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "extension_id": "abk_uvc_camera",
+  "usb": {
+    "high_speed_theoretical_bps": 480000000,
+    "high_speed_practical_budget_bps": 240000000,
+    "notes": "Compressed formats are required for high resolutions on USB 2.0."
+  },
+  "profiles": [
+    {
+      "id": "yuy2_640x360",
+      "camera": "any",
+      "format": "YUY2",
+      "width": 640,
+      "height": 360,
+      "fps": 30,
+      "stable": true,
+      "experimental": false,
+      "estimated_mbps": 110
+    },
+    {
+      "id": "yuy2_1280x720",
+      "camera": "any",
+      "format": "YUY2",
+      "width": 1280,
+      "height": 720,
+      "fps": 30,
+      "stable": true,
+      "experimental": false,
+      "estimated_mbps": 442
+    },
+    {
+      "id": "mjpeg_640x360",
+      "camera": "any",
+      "format": "MJPEG",
+      "width": 640,
+      "height": 360,
+      "fps": 30,
+      "stable": true,
+      "experimental": false,
+      "estimated_mbps": 25
+    },
+    {
+      "id": "mjpeg_1280x720",
+      "camera": "any",
+      "format": "MJPEG",
+      "width": 1280,
+      "height": 720,
+      "fps": 30,
+      "stable": true,
+      "experimental": false,
+      "estimated_mbps": 90
+    },
+    {
+      "id": "mjpeg_1920x1080_30",
+      "camera": "any",
+      "format": "MJPEG",
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "stable": true,
+      "experimental": false,
+      "estimated_mbps": 140
+    },
+    {
+      "id": "mjpeg_1920x1080_60",
+      "camera": "any",
+      "format": "MJPEG",
+      "width": 1920,
+      "height": 1080,
+      "fps": 60,
+      "stable": false,
+      "experimental": true,
+      "estimated_mbps": 230
+    },
+    {
+      "id": "mjpeg_3840x2160_15",
+      "camera": "any",
+      "format": "MJPEG",
+      "width": 3840,
+      "height": 2160,
+      "fps": 15,
+      "stable": false,
+      "experimental": true,
+      "estimated_mbps": 220
+    },
+    {
+      "id": "mjpeg_3840x2160_30",
+      "camera": "any",
+      "format": "MJPEG",
+      "width": 3840,
+      "height": 2160,
+      "fps": 30,
+      "stable": false,
+      "experimental": true,
+      "estimated_mbps": 400
+    },
+    {
+      "id": "h264_1920x1080_60",
+      "camera": "any",
+      "format": "H264",
+      "width": 1920,
+      "height": 1080,
+      "fps": 60,
+      "stable": false,
+      "experimental": true,
+      "estimated_mbps": 120,
+      "requires_h264_uvc_descriptor": true
+    },
+    {
+      "id": "h264_3840x2160_30",
+      "camera": "any",
+      "format": "H264",
+      "width": 3840,
+      "height": 2160,
+      "fps": 30,
+      "stable": false,
+      "experimental": true,
+      "estimated_mbps": 220,
+      "requires_h264_uvc_descriptor": true
+    },
+    {
+      "id": "h264_3840x2160_60",
+      "camera": "any",
+      "format": "H264",
+      "width": 3840,
+      "height": 2160,
+      "fps": 60,
+      "stable": false,
+      "experimental": true,
+      "estimated_mbps": 420,
+      "requires_h264_uvc_descriptor": true
+    }
+  ]
+}

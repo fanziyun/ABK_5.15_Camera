@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  host-tests:
+    name: Host tests (installer + profiles)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run Python unit tests
+        run: python -m unittest discover -s tests -v
+
+  companion-app:
+    name: Companion app (unit tests + debug APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Grant gradlew
+        run: chmod +x gradlew
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: abk-camera-companion-debug
+          path: app/build/outputs/apk/debug/app-debug.apk

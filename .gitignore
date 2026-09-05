@@ -1,0 +1,16 @@
+# Android/Gradle
+.gradle/
+.idea/
+local.properties
+build/
+app/build/
+*.iml
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local artifacts
+out/
+artifacts/

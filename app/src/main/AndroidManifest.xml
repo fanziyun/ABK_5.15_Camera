@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <queries>
+        <package android:name="com.abk.kernel" />
+        <package android:name="com.android.DeviceAsWebcam" />
+    </queries>
+
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AbkCamera">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.AbkCamera">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".CameraBootstrapActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:finishOnTaskLaunch="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="com.abk.kernel.action.ABK_EXTENSION" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="com.abk.kernel.extension.ID"
+                android:value="abk_uvc_camera" />
+            <meta-data
+                android:name="com.abk.kernel.extension.NAME"
+                android:value="ABK Camera Companion" />
+            <meta-data
+                android:name="com.abk.kernel.extension.OOBE_ACTIVITY"
+                android:value=".CameraBootstrapActivity" />
+            <meta-data
+                android:name="com.abk.kernel.extension.SETTINGS_ACTIVITY"
+                android:value=".MainActivity" />
+            <meta-data
+                android:name="com.abk.kernel.extension.SERVICE_ACTIVITY"
+                android:value=".CameraControlService" />
+        </activity>
+
+        <service
+            android:name=".CameraControlService"
+            android:directBootAware="true"
+            android:exported="true"
+            android:foregroundServiceType="camera" />
+
+        <receiver
+            android:name=".BootReceiver"
+            android:directBootAware="true"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.USER_UNLOCKED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

@@ -1,0 +1,15 @@
+config ABK_UVC_CAMERA
+	bool "ABK USB UVC camera coordination"
+	depends on USB_CONFIGFS
+	depends on USB_CONFIGFS_F_UVC
+	depends on USB_F_UVC
+	depends on VIDEO_DEV
+	depends on VIDEO_V4L2
+	depends on MEDIA_SUPPORT
+	default n
+	help
+	  Add the ABK camera state/control surface and a configfs hook for the
+	  standard Linux UVC gadget.  The Android companion owns Camera2 frame
+	  capture and links a vendor-preconfigured uvc.0 function.  This option
+	  does not implement a sensor driver, userspace permission bypass, video
+	  encoder, or arbitrary shell execution.
