@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Apply the namespaced ABK UVC configfs observation hooks once.
+"""Apply the namespaced ABK UVC configfs hooks once.
 
-The hook deliberately does not fabricate a UVC descriptor tree.  The Android
-companion links the device's preconfigured uvc.0 function, while this hook
-records the function/FIDO state during configfs bind and release.  This keeps
-it compatible with the ABK FIDO hook in either installation order.
+The prepare hook injects the vendor-preconfigured uvc.0 function into the
+active config when the camera is enabled, and the purge hook removes that
+injected function again.  It never fabricates a UVC descriptor tree and never
+removes the FIDO function, so it stays compatible with the ABK FIDO hook in
+either installation order.
 """
 
 from __future__ import annotations
@@ -18,15 +19,24 @@ INCLUDE_ANCHOR = '#include "u_os_desc.h"'
 INCLUDE_LINE = "#include <linux/abk_uvc_camera.h>"
 PREPARE_NEEDLE = "\t\tlist_for_each_entry_safe(f, tmp, &cfg->func_list, list) {"
 PREPARE_BLOCK = (
-    f'\t\t/* {MARKER}: camera state hook; never creates an unconfigured UVC tree. */\n'
+    f'\t\t/* {MARKER}: inject preconfigured uvc.0 when camera enabled. */\n'
     "#ifdef CONFIG_ABK_UVC_CAMERA\n"
-    "\t\tret = abk_uvc_camera_prepare_config(cdev, c, &cfg->func_list);\n"
+    "\t\tret = abk_uvc_camera_prepare_config(cdev, c, &cfg->func_list,\n"
+    "\t\t\t\t\t\t  &gi->available_func);\n"
     "\t\tif (ret) {\n"
     '\t\t\tpr_warn("abk_uvc_camera: prepare_config failed: %d\\n", ret);\n'
     "\t\t\tret = 0; /* camera state must not take FIDO/ADB down */\n"
     "\t\t}\n"
     "#endif\n\n"
     + PREPARE_NEEDLE
+)
+DROP_NEEDLE = "\t\tc->next_interface_id = 0;"
+DROP_BLOCK = (
+    f'\t\t/* {MARKER}: remove injected uvc.0 after unbind/purge. */\n'
+    "#ifdef CONFIG_ABK_UVC_CAMERA\n"
+    "\t\tabk_uvc_camera_drop_injected(&cfg->func_list);\n"
+    "#endif\n"
+    + DROP_NEEDLE
 )
 RELEASE_NEEDLE = (
     "static void gadget_config_attr_release(struct config_item *item)\n"
@@ -67,6 +77,11 @@ def main() -> int:
         if PREPARE_NEEDLE not in updated:
             fail(f"prepare injection point not found in {path}")
         updated = updated.replace(PREPARE_NEEDLE, PREPARE_BLOCK, 1)
+
+    if "abk_uvc_camera_drop_injected" not in updated:
+        if DROP_NEEDLE not in updated:
+            fail(f"drop injection point not found in {path}")
+        updated = updated.replace(DROP_NEEDLE, DROP_BLOCK, 1)
 
     if "abk_uvc_camera_release_config" not in updated:
         if RELEASE_NEEDLE not in updated:

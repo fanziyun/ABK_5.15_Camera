@@ -3,13 +3,20 @@ package com.abk.extension.camera
 import android.util.Log
 
 /**
- * Runtime USB coordination.  This device uses sys.usb.configfs=2, which means
- * the Android framework (UsbDeviceManager) owns the gadget.  Writing configfs
- * symlinks by hand races with the framework, so on configfs=2 we ask the
- * framework to mount UVC through the official service call instead.
+ * Runtime USB coordination.
  *
- * configfs=2 -> svc usb setFunctions uvc (framework mounts UVC via ConfigFS)
- * configfs=1 -> setprop sys.usb.config diag,uvc,adb (vendor Qualcomm path)
+ * This device uses sys.usb.configfs=2, so the Android framework owns the
+ * gadget.  The framework Gadget HAL (V1.1) cannot mount UVC itself, and
+ * `svc usb setFunctions uvc` leaves the gadget in an ADB-only state.
+ *
+ * Instead the kernel module injects the vendor-preconfigured uvc.0 function
+ * during the configfs bind path.  The app only enables/disables that kernel
+ * flag and then forces a harmless framework function toggle to trigger a
+ * rebind:
+ *
+ *     svc usb setFunctions none -> svc usb setFunctions mtp
+ *
+ * The final config is MTP + ADB + kernel-injected UVC.
  */
 internal object UsbCoordinator {
     private const val TAG = "AbkUsbCoordinator"
@@ -35,7 +42,7 @@ internal object UsbCoordinator {
 
     fun restoreUsbConfig(original: String): RootShell.CommandResult {
         if (readConfigfsMode() == "2") {
-            return RootShell.run("svc usb setFunctions mtp && sleep 1")
+            return triggerRebind()
         }
         val safe = if (original.isBlank()) "adb" else original
         return RootShell.run("setprop sys.usb.config " + safe + " && sleep 1")
@@ -54,7 +61,9 @@ internal object UsbCoordinator {
         return result.success && result.stdout.contains("online")
     }
 
-    fun isUvcLinked(): Boolean = hasFunctionLink("uvc")
+    fun isUvcConfigured(): Boolean =
+        CameraKernelBridge.readUsbState().trim() == "uvc_configured"
+
     fun isMtpLinked(): Boolean = hasFunctionLink("mtp")
     fun isAdbLinked(): Boolean = hasFunctionLink("adb")
 
@@ -64,33 +73,39 @@ internal object UsbCoordinator {
         }
 
         val mode = readConfigfsMode()
-        val linked = if (mode == "2") applyFrameworkUvc() else applyVendorUvc()
+        val uvcOnline = if (mode == "2") applyFrameworkUvc() else applyVendorUvc()
 
-        if (!linked || !isUvcLinked()) {
-            Log.w(TAG, "UVC did not materialize on configfs=$mode; restoring original")
+        if (!uvcOnline) {
+            Log.w(TAG, "UVC did not come up on configfs=$mode; restoring USB")
             restoreUsbConfig(original)
             return UsbCoordinatorState(false, false, "uvc_failed")
         }
 
-        val fido = isFidoPresent()
-        val suffix = if (fido) "uvc_fido" else "uvc"
-        return UsbCoordinatorState(true, isMtpLinked(), suffix + "_adb")
+        val mtp = isMtpLinked()
+        val adb = isAdbLinked()
+        val state = when {
+            mtp && adb -> "uvc_mtp_adb"
+            adb -> "uvc_adb"
+            else -> "uvc"
+        }
+        return UsbCoordinatorState(true, mtp, state)
     }
 
-    private fun applyFrameworkUvc(): Boolean {
-        // Official Android 14+ DeviceAsWebcam control path.  This mounts the
-        // UVC function through the USB Gadget HAL without racing the framework.
-        val viaSvc = RootShell.run("svc usb setFunctions uvc && sleep 2")
-        if (viaSvc.success && isUvcLinked()) return true
+    private fun triggerRebind(): RootShell.CommandResult =
+        RootShell.run("svc usb setFunctions none && sleep 1 && svc usb setFunctions mtp && sleep 2")
 
-        // Fallback: direct property write (kept for devices that accept it).
-        val viaProp = setUsbConfig("uvc")
-        return viaProp.success && isUvcLinked()
+    private fun applyFrameworkUvc(): Boolean {
+        val result = triggerRebind()
+        if (!result.success) {
+            Log.w(TAG, "framework rebind failed")
+            return false
+        }
+        return isUvcConfigured()
     }
 
     private fun applyVendorUvc(): Boolean {
         val result = setUsbConfig("diag,uvc,adb")
-        return result.success && isUvcLinked() && isAdbLinked()
+        return result.success && isUvcConfigured() && isAdbLinked()
     }
 }
 

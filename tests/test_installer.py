@@ -22,6 +22,21 @@ static void gadget_config_attr_release(struct config_item *item)
 	struct config_usb_cfg *cfg = to_config_usb_cfg(item);
 }
 
+static void purge_configs_funcs(struct gadget_info *gi)
+{
+	struct usb_configuration *c;
+	struct usb_function *f, *tmp;
+
+	list_for_each_entry(c, &gi->cdev.configs, list) {
+		struct config_usb_cfg *cfg = container_of(c, struct config_usb_cfg, c);
+
+		list_for_each_entry_safe_reverse(f, tmp, &c->functions, list) {
+			list_move(&f->list, &cfg->func_list);
+		}
+		c->next_interface_id = 0;
+	}
+}
+
 static int configfs_composite_bind(struct usb_gadget *gadget,
 		struct usb_gadget_driver *gdriver)
 {
@@ -80,6 +95,7 @@ class InstallerTests(unittest.TestCase):
         patched = (tree / "common/drivers/usb/gadget/configfs.c").read_text()
         self.assertEqual(patched.count("abk_uvc_camera_prepare_config"), 1)
         self.assertEqual(patched.count("abk_uvc_camera_release_config"), 1)
+        self.assertEqual(patched.count("abk_uvc_camera_drop_injected"), 1)
 
     def test_patch_works_after_fido_marker(self) -> None:
         tree, defconfig = self.make_tree()
@@ -92,6 +108,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         text = configfs.read_text()
         self.assertEqual(text.count("abk_uvc_camera_prepare_config"), 1)
+        self.assertEqual(text.count("abk_uvc_camera_drop_injected"), 1)
 
     def test_rejects_non_515_kernel(self) -> None:
         tree, defconfig = self.make_tree("6.1.100")

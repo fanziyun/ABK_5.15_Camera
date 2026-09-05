@@ -9,6 +9,7 @@
  */
 
 #include <linux/ctype.h>
+#include <linux/configfs.h>
 #include <linux/err.h>
 #include <linux/kernel.h>
 #include <linux/kobject.h>
@@ -43,6 +44,14 @@ struct abk_uvc_camera_state {
 
 static struct abk_uvc_camera_state abk_uvc_camera;
 
+struct abk_uvc_injected_func {
+	struct list_head node;
+	struct list_head *owner;
+	struct usb_function *f;
+};
+
+static LIST_HEAD(abk_uvc_injected_funcs);
+static DEFINE_MUTEX(abk_uvc_injected_lock);
 static const char abk_uvc_supported_profiles[] =
 	"yuy2_640x360\n"
 	"yuy2_1280x720\n"
@@ -384,19 +393,101 @@ static const struct attribute_group abk_uvc_attr_group = {
 	.attrs = abk_uvc_attrs,
 };
 
+static struct usb_function_instance *
+abk_uvc_find_instance(struct list_head *available_func)
+{
+	struct usb_function_instance *fi;
+
+	if (!available_func)
+		return NULL;
+	list_for_each_entry(fi, available_func, cfs_list) {
+		const char *name = config_item_name(&fi->group.cg_item);
+		if (name && !strcmp(name, "uvc.0"))
+			return fi;
+	}
+	return NULL;
+}
+
+static int abk_uvc_inject(struct list_head *func_list,
+			  struct list_head *available_func)
+{
+	struct usb_function_instance *fi;
+	struct usb_function *f;
+	struct abk_uvc_injected_func *node;
+
+	fi = abk_uvc_find_instance(available_func);
+	if (!fi)
+		return -ENOENT;
+
+	f = usb_get_function(fi);
+	if (IS_ERR(f))
+		return PTR_ERR(f);
+
+	node = kmalloc(sizeof(*node), GFP_KERNEL);
+	if (!node) {
+		usb_put_function(f);
+		return -ENOMEM;
+	}
+
+	node->f = f;
+	node->owner = func_list;
+
+	mutex_lock(&abk_uvc_injected_lock);
+	list_add_tail(&f->list, func_list);
+	list_add_tail(&node->node, &abk_uvc_injected_funcs);
+	mutex_unlock(&abk_uvc_injected_lock);
+
+	return 0;
+}
+
+void abk_uvc_camera_drop_injected(struct list_head *func_list)
+{
+	struct abk_uvc_injected_func *node, *tmp;
+
+	if (!func_list)
+		return;
+
+	mutex_lock(&abk_uvc_injected_lock);
+	list_for_each_entry_safe(node, tmp, &abk_uvc_injected_funcs, node) {
+		if (node->owner != func_list)
+			continue;
+		if (!list_empty(&node->f->list))
+			list_del_init(&node->f->list);
+		usb_put_function(node->f);
+		list_del(&node->node);
+		kfree(node);
+	}
+	mutex_unlock(&abk_uvc_injected_lock);
+}
+EXPORT_SYMBOL_GPL(abk_uvc_camera_drop_injected);
+
 int abk_uvc_camera_prepare_config(struct usb_composite_dev *cdev,
 				  struct usb_configuration *cfg,
-				  struct list_head *func_list)
+				  struct list_head *func_list,
+				  struct list_head *available_func)
 {
 	bool has_uvc;
 	bool has_fido;
+	int ret;
 
-	if (!cdev || !cfg || !func_list)
+	if (!cdev || !cfg || !func_list || !available_func)
 		return -EINVAL;
 
 	has_uvc = abk_uvc_has_function(func_list, "uvc");
 	has_fido = abk_uvc_has_function(func_list, "abk_fido");
+
 	mutex_lock(&abk_uvc_camera.lock);
+	if (abk_uvc_camera.enabled && !has_uvc) {
+		mutex_unlock(&abk_uvc_camera.lock);
+		ret = abk_uvc_inject(func_list, available_func);
+		mutex_lock(&abk_uvc_camera.lock);
+		if (ret) {
+			abk_uvc_error_locked("uvc_inject_failed");
+		} else {
+			has_uvc = abk_uvc_has_function(func_list, "uvc");
+		}
+	}
+
 	if (!abk_uvc_camera.enabled) {
 		abk_uvc_set_locked(abk_uvc_camera.usb_state,
 				   sizeof(abk_uvc_camera.usb_state), "camera_disabled");
