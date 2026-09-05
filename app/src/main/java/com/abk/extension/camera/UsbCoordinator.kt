@@ -3,25 +3,22 @@ package com.abk.extension.camera
 import android.util.Log
 
 /**
- * Coordinates the Android USB gadget at runtime without modifying the vendor
- * init.rc.  The fixed priority is:
+ * Coordinates the Android USB gadget at runtime.  The camera works standalone;
+ * FIDO is optional.  When FIDO is present the kernel configfs hook auto-attaches
+ * it, so the coordinator only needs to keep the vendor UVC+ADB composite stable.
  *
- * FIDO online -> UVC + ADB (vendor composite, FIDO auto-attaches) ->
- * try MTP -> MTP failure keeps UVC + ADB -> FIDO failure restores original.
- *
- * Unlike the previous implementation this never trusts `setprop` alone:
- * every step verifies the actual configfs links before reporting success.
+ * Priority:
+ *   UVC + ADB -> try MTP -> MTP failure keeps UVC + ADB.
+ *   A missing/offline FIDO no longer blocks the camera.
  */
 internal object UsbCoordinator {
     private const val TAG = "AbkUsbCoordinator"
 
-    private const val GADGET = "/config/usb_gadget/g1"
     private const val UDC = "/config/usb_gadget/g1/UDC"
     private const val CONFIG = "/config/usb_gadget/g1/configs/b.1"
 
-    // The vendor init.qcom.usb.rc defines this composite and sets up the
-    // functionfs ADB daemon + UVC function instance.  FIDO is injected by the
-    // kernel hook, so the effective device is diag + UVC + ADB + FIDO.
+    // Vendor init.qcom.usb.rc defines this composite.  FIDO, when compiled in,
+    // is injected automatically by the kernel configfs hook.
     private const val UVC_ADB_COMPOSITE = "diag,uvc,adb"
 
     fun readOriginalConfig(): String =
@@ -48,6 +45,9 @@ internal object UsbCoordinator {
         return result.success
     }
 
+    fun isFidoPresent(): Boolean =
+        RootShell.run("[ -d /sys/kernel/abk_fido_key ]").success
+
     fun isFidoOnline(): Boolean {
         val result = RootShell.run("cat /sys/kernel/abk_fido_key/attach_state 2>/dev/null")
         return result.success && result.stdout.contains("online")
@@ -57,18 +57,9 @@ internal object UsbCoordinator {
     fun isMtpLinked(): Boolean = hasFunctionLink("mtp")
     fun isAdbLinked(): Boolean = hasFunctionLink("adb")
 
-    /**
-     * Applies the USB priority and verifies configfs state.  Returns the
-     * actual achieved mode rather than assuming `setprop` succeeded.
-     */
     fun applyPriority(original: String): UsbCoordinatorState {
         if (!CameraKernelBridge.isPresent()) {
             return UsbCoordinatorState(false, false, "kernel_driver_missing")
-        }
-        if (!isFidoOnline()) {
-            Log.w(TAG, "FIDO is offline; restoring original USB config")
-            restoreUsbConfig(original)
-            return UsbCoordinatorState(false, false, "fido_offline_restored")
         }
 
         val baseline = setUsbConfig(UVC_ADB_COMPOSITE)
@@ -79,23 +70,21 @@ internal object UsbCoordinator {
         }
 
         val mtpLinked = tryEnableMtp()
-        return if (mtpLinked && isMtpLinked() && isUvcLinked() && isAdbLinked()) {
-            UsbCoordinatorState(true, true, "uvc_fido_mtp_adb")
+        val stable = mtpLinked && isMtpLinked() && isUvcLinked() && isAdbLinked()
+        if (mtpLinked && !stable) {
+            disableMtp()
+            setUsbConfig(UVC_ADB_COMPOSITE)
+        }
+
+        val fido = isFidoPresent()
+        val suffix = if (fido) "uvc_fido" else "uvc"
+        return if (stable) {
+            UsbCoordinatorState(true, true, suffix + "_mtp_adb")
         } else {
-            if (mtpLinked) {
-                // MTP link was created but another function dropped out.
-                disableMtp()
-                setUsbConfig(UVC_ADB_COMPOSITE)
-            }
-            UsbCoordinatorState(true, false, "uvc_fido_adb")
+            UsbCoordinatorState(true, false, suffix + "_adb")
         }
     }
 
-    /**
-     * Best-effort MTP attach using direct configfs links.  MTP+UVC is not a
-     * vendor composite, so this unbinds the UDC, links ffs.mtp, and rebinds.
-     * Any failure leaves the caller with the stable UVC+ADB baseline.
-     */
     private fun tryEnableMtp(): Boolean {
         val script = """
             set -e

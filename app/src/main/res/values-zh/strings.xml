@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ABK 摄像头伴侣</string>
+    <string name="service_channel_name">ABK UVC 摄像头</string>
+    <string name="service_title">ABK 摄像头伴侣</string>
+    <string name="service_text">正在协调 USB UVC 摄像头输出</string>
+
+    <string name="main_title">UVC 摄像头</string>
+    <string name="main_subtitle">AnyBase Kernel</string>
+    <string name="section_camera">摄像头输出</string>
+    <string name="section_status">状态</string>
+
+    <string name="master_switch_title">启用 UVC 摄像头</string>
+    <string name="camera_label">摄像头</string>
+    <string name="camera_front">前置</string>
+    <string name="camera_back">后置</string>
+    <string name="profile_label">分辨率档位</string>
+    <string name="backend_label">帧源</string>
+    <string name="backend_none">无</string>
+    <string name="backend_test_pattern">测试彩条</string>
+    <string name="backend_device_as_webcam">DeviceAsWebcam</string>
+    <string name="backend_camera2">Camera2</string>
+
+    <string name="usb_label">USB 状态</string>
+    <string name="fido_label">FIDO 状态</string>
+    <string name="speed_label">USB 速率</string>
+    <string name="stream_label">取流状态</string>
+    <string name="profile_summary">当前分辨率档位</string>
+
+    <string name="switch_camera">切换前后摄</string>
+    <string name="restore_usb">恢复原始 USB</string>
+    <string name="start">启动</string>
+    <string name="stop">停止</string>
+
+    <string name="root_needed">需要 Root 权限。</string>
+    <string name="driver_missing">本机缺少 abk_uvc_camera 内核驱动。</string>
+    <string name="camera_aborted">摄像头输出已中止：%1$s</string>
+    <string name="status_driver">内核驱动</string>
+    <string name="status_root">Root</string>
+    <string name="value_present">存在</string>
+    <string name="value_missing">缺失</string>
+    <string name="value_online">在线</string>
+    <string name="value_offline">离线</string>
+    <string name="value_yes">是</string>
+    <string name="value_no">否</string>
+    <string name="value_unknown">未知</string>
+</resources>

@@ -4,8 +4,12 @@
     <string name="service_channel_name">ABK UVC camera</string>
     <string name="service_title">ABK Camera Companion</string>
     <string name="service_text">Coordinating the USB UVC camera output</string>
+
     <string name="main_title">UVC CAMERA</string>
     <string name="main_subtitle">AnyBase Kernel</string>
+    <string name="section_camera">Camera output</string>
+    <string name="section_status">Status</string>
+
     <string name="master_switch_title">Enable UVC camera</string>
     <string name="camera_label">Camera</string>
     <string name="camera_front">Front</string>
@@ -16,13 +20,28 @@
     <string name="backend_test_pattern">Test pattern</string>
     <string name="backend_device_as_webcam">DeviceAsWebcam</string>
     <string name="backend_camera2">Camera2</string>
-    <string name="status_label">Status</string>
+
     <string name="usb_label">USB state</string>
     <string name="fido_label">FIDO state</string>
-    <string name="root_needed">Root access is required.</string>
-    <string name="driver_missing">The abk_uvc_camera kernel driver is not present on this phone.</string>
-    <string name="start">Start</string>
-    <string name="stop">Stop</string>
+    <string name="speed_label">USB speed</string>
+    <string name="stream_label">Stream state</string>
+    <string name="profile_summary">Current profile</string>
+
     <string name="switch_camera">Switch camera</string>
     <string name="restore_usb">Restore original USB</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+
+    <string name="root_needed">Root access is required.</string>
+    <string name="driver_missing">The abk_uvc_camera kernel driver is not present on this phone.</string>
+    <string name="camera_aborted">Camera output aborted: %1$s</string>
+    <string name="status_driver">Kernel driver</string>
+    <string name="status_root">Root</string>
+    <string name="value_present">present</string>
+    <string name="value_missing">missing</string>
+    <string name="value_online">online</string>
+    <string name="value_offline">offline</string>
+    <string name="value_yes">yes</string>
+    <string name="value_no">no</string>
+    <string name="value_unknown">unknown</string>
 </resources>

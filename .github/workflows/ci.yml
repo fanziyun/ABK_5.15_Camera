@@ -18,7 +18,7 @@ jobs:
         run: python -m unittest discover -s tests -v
 
   companion-app:
-    name: Companion app (unit tests + debug APK)
+    name: Companion app (unit tests + APKs)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,8 +33,12 @@ jobs:
         run: ./gradlew :app:testDebugUnitTest --no-daemon
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
-      - name: Upload APK
+      - name: Assemble release APK
+        run: ./gradlew :app:assembleRelease --no-daemon
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: abk-camera-companion-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: abk-camera-companion-apks
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
