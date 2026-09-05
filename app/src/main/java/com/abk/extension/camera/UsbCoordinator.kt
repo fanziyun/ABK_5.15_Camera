@@ -3,29 +3,27 @@ package com.abk.extension.camera
 import android.util.Log
 
 /**
- * Coordinates the Android USB gadget at runtime.  The camera works standalone;
- * FIDO is optional.  When FIDO is present the kernel configfs hook auto-attaches
- * it, so the coordinator only needs to keep the vendor UVC+ADB composite stable.
+ * Runtime USB coordination.  This device uses sys.usb.configfs=2, which means
+ * the Android framework (UsbDeviceManager) owns the gadget.  Writing configfs
+ * symlinks by hand races with the framework, so on configfs=2 we ask the
+ * framework to mount UVC through the official service call instead.
  *
- * Priority:
- *   UVC + ADB -> try MTP -> MTP failure keeps UVC + ADB.
- *   A missing/offline FIDO no longer blocks the camera.
+ * configfs=2 -> svc usb setFunctions uvc (framework mounts UVC via ConfigFS)
+ * configfs=1 -> setprop sys.usb.config diag,uvc,adb (vendor Qualcomm path)
  */
 internal object UsbCoordinator {
     private const val TAG = "AbkUsbCoordinator"
-
     private const val UDC = "/config/usb_gadget/g1/UDC"
     private const val CONFIG = "/config/usb_gadget/g1/configs/b.1"
-
-    // Vendor init.qcom.usb.rc defines this composite.  FIDO, when compiled in,
-    // is injected automatically by the kernel configfs hook.
-    private const val UVC_ADB_COMPOSITE = "diag,uvc,adb"
 
     fun readOriginalConfig(): String =
         RootShell.run("getprop persist.sys.usb.config").stdout.trim().ifBlank { "adb" }
 
     fun readCurrentConfig(): String =
         RootShell.run("getprop sys.usb.config").stdout.trim()
+
+    fun readConfigfsMode(): String =
+        RootShell.run("getprop sys.usb.configfs").stdout.trim().ifBlank { "2" }
 
     fun readUdc(): String = RootShell.readTextFile(UDC).stdout.trim()
 
@@ -36,6 +34,9 @@ internal object UsbCoordinator {
         RootShell.run("setprop sys.usb.config " + composite + " && sleep 1")
 
     fun restoreUsbConfig(original: String): RootShell.CommandResult {
+        if (readConfigfsMode() == "2") {
+            return RootShell.run("svc usb setFunctions mtp && sleep 1")
+        }
         val safe = if (original.isBlank()) "adb" else original
         return RootShell.run("setprop sys.usb.config " + safe + " && sleep 1")
     }
@@ -62,47 +63,34 @@ internal object UsbCoordinator {
             return UsbCoordinatorState(false, false, "kernel_driver_missing")
         }
 
-        val baseline = setUsbConfig(UVC_ADB_COMPOSITE)
-        if (!baseline.success || !isUvcLinked() || !isAdbLinked()) {
-            Log.w(TAG, "UVC+ADB composite did not materialize; restoring original")
-            restoreUsbConfig(original)
-            return UsbCoordinatorState(false, false, "uvc_adb_failed")
-        }
+        val mode = readConfigfsMode()
+        val linked = if (mode == "2") applyFrameworkUvc() else applyVendorUvc()
 
-        val mtpLinked = tryEnableMtp()
-        val stable = mtpLinked && isMtpLinked() && isUvcLinked() && isAdbLinked()
-        if (mtpLinked && !stable) {
-            disableMtp()
-            setUsbConfig(UVC_ADB_COMPOSITE)
+        if (!linked || !isUvcLinked()) {
+            Log.w(TAG, "UVC did not materialize on configfs=$mode; restoring original")
+            restoreUsbConfig(original)
+            return UsbCoordinatorState(false, false, "uvc_failed")
         }
 
         val fido = isFidoPresent()
         val suffix = if (fido) "uvc_fido" else "uvc"
-        return if (stable) {
-            UsbCoordinatorState(true, true, suffix + "_mtp_adb")
-        } else {
-            UsbCoordinatorState(true, false, suffix + "_adb")
-        }
+        return UsbCoordinatorState(true, isMtpLinked(), suffix + "_adb")
     }
 
-    private fun tryEnableMtp(): Boolean {
-        val script = """
-            set -e
-            base=/config/usb_gadget/g1
-            cfg="${'$'}base/configs/b.1"
-            udc="${'$'}(cat "${'$'}base/UDC" 2>/dev/null || true)"
-            echo "" > "${'$'}base/UDC" 2>/dev/null || true
-            i=0
-            while [ -e "${'$'}cfg/function${'$'}i" ]; do i=${'$'}((i + 1)); done
-            ln -s ../../../../usb_gadget/g1/functions/ffs.mtp "${'$'}cfg/function${'$'}i"
-            if [ -n "${'$'}udc" ]; then echo "${'$'}udc" > "${'$'}base/UDC"; fi
-        """.trimIndent()
-        val result = RootShell.run(script, timeoutSeconds = 8L)
-        return result.success && isMtpLinked()
+    private fun applyFrameworkUvc(): Boolean {
+        // Official Android 14+ DeviceAsWebcam control path.  This mounts the
+        // UVC function through the USB Gadget HAL without racing the framework.
+        val viaSvc = RootShell.run("svc usb setFunctions uvc && sleep 2")
+        if (viaSvc.success && isUvcLinked()) return true
+
+        // Fallback: direct property write (kept for devices that accept it).
+        val viaProp = setUsbConfig("uvc")
+        return viaProp.success && isUvcLinked()
     }
 
-    private fun disableMtp() {
-        RootShell.run("rm -f /config/usb_gadget/g1/configs/b.1/function*ffs.mtp 2>/dev/null; true")
+    private fun applyVendorUvc(): Boolean {
+        val result = setUsbConfig("diag,uvc,adb")
+        return result.success && isUvcLinked() && isAdbLinked()
     }
 }
 
